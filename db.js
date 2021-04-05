@@ -1,6 +1,10 @@
 const Sequelize = require('sequelize');
-const JWT = require('jsonwebtoken')
+const JWT = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
 
+const process_env_JWT = 'somekeyhere';
+
+const saltRounds = 10;
 
 const { STRING } = Sequelize;
 const config = {
@@ -17,9 +21,15 @@ const User = conn.define('user', {
   password: STRING
 });
 
+User.beforeCreate(async (user) => {
+  const hash = await bcrypt.hash(user.password, saltRounds);
+  // Store hash in your password DB.
+  user.password = hash;
+})
+
 User.byToken = async(token)=> {
   try {
-   const newToken = JWT.verify(token, process.env.JWT)
+   const newToken = JWT.verify(token, process_env_JWT)
    const { userId } = newToken
 
     const user = await User.findByPk(userId);
@@ -41,18 +51,30 @@ User.byToken = async(token)=> {
 console.log('This the environment ------>', process.env.JWT)
 
 
-User.authenticate = async({ username, password })=> {
+User.authenticate = async({ username, password }) => {
+
+  let tempHashPassword = await bcrypt.hash(password, saltRounds)
+  const hashMatch = await bcrypt.compare(password, tempHashPassword)
+
+  console.log("authenticate Password===>", password);
+  console.log("authenticate hashPassword===>", hashPassword);
+
+  if (hashMatch) {
+
+  }
+
   const user = await User.findOne({
     where: {
       username,
-      password
+      password: tempHashPassword
     }
   });
   if(user){
-    const token = JWT.sign({ userId: user.id }, process.env.JWT);
+    const token = JWT.sign({ userId: user.id }, process_env_JWT);
     console.log('This is the token in the auth method -------->>>>>>>>', token)
     return token
   }
+
   const error = Error('bad credentials');
   error.status = 401;
   throw error;
